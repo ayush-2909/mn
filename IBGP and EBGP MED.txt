@@ -1,0 +1,213 @@
+Step 0: Suggested starting configurations.
+Apply the following configuration to each router along with the appropriate hostname. The exec-timeout 0 0 command should only be used in a lab environment.
+Router(config)# no ip domain-lookup
+Router(config)# line con 0
+Router(config-line)# logging synchronous
+Router(config-line)# exec-timeout 0 0
+
+Step 1: Configure interface addresses.
+Using the addressing scheme in the diagram, create the loopback interfaces and apply IPv4 addresses to these and the serial interfaces on ISP (R1), SanJose1 (R2), and SanJose2 (R3). 
+Router R1 (hostname ISP)
+ISP(config)# interface Loopback0
+ISP(config-if)# ip address 192.168.100.1 255.255.255.0
+ISP(config-if)# exit
+ISP(config)# interface Serial0/0/0
+ISP(config-if)# ip address 192.168.1.5 255.255.255.252
+ISP(config-if)# clock rate 128000
+ISP(config-if)# no shutdown
+ISP(config-if)# exit
+ISP(config)# interface Serial0/0/1
+ISP(config-if)# ip address 192.168.1.1 255.255.255.252
+ISP(config-if)# no shutdown
+ISP(config-if)# end
+
+Router R2 (hostname SanJose1)
+SanJose1(config)# interface Loopback0
+SanJose1(config-if)# ip address 172.16.64.1 255.255.255.0
+SanJose1(config-if)# exit
+SanJose1(config)# interface Serial0/0/0
+SanJose1(config-if)# ip address 192.168.1.6 255.255.255.252
+SanJose1(config-if)# no shutdown
+SanJose1(config-if)# exit
+SanJose1(config)# interface Serial0/0/1
+SanJose1(config-if)# ip address 172.16.1.1 255.255.255.0
+SanJose1(config-if)# clock rate 128000
+SanJose1(config-if)# no shutdown
+SanJose1(config-if)# end
+SanJose1#
+
+
+outer R3 (hostname SanJose2)
+SanJose2(config)# interface Loopback0
+SanJose2(config-if)# ip address 172.16.32.1 255.255.255.0
+SanJose2(config-if)# exit
+SanJose2(config)# interface Serial0/0/0
+SanJose2(config-if)# ip address 192.168.1.2 255.255.255.252
+SanJose2(config-if)# clock rate 128000
+SanJose2(config-if)# no shutdown
+SanJose2(config-if)# exit
+SanJose2(config)# interface Serial0/0/1
+SanJose2(config-if)# ip address 172.16.1.2 255.255.255.0
+SanJose2(config-if)# no shutdown
+SanJose2(config-if)# end
+SanJose2#
+
+
+b. Use ping to test the connectivity between the directly connected routers. Both SanJose routers should be able to ping each other and their local ISP serial link IP address. The ISP router cannot reach the segment between SanJose1 and SanJose2.
+
+Step 2: Configure EIGRP.
+
+SanJose1(config)# router eigrp 1
+SanJose1(config-router)# network 172.16.0.0
+
+SanJose2(config)# router eigrp 1
+SanJose2(config-router)# network 172.16.0.0
+
+
+Step 3: Configure IBGP and verify BGP neighbors. 
+a. 
+
+SanJose1(config)# router bgp 64512
+SanJose1(config-router)# neighbor 172.16.32.1 remote-as 64512
+SanJose1(config-router)# neighbor 172.16.32.1 update-source lo0
+
+b.Complete the IBGP configuration on SanJose2 using the following commands.
+
+SanJose2(config)# router bgp 64512
+SanJose2(config-router)# neighbor 172.16.64.1 remote-as 64512
+SanJose2(config-router)# neighbor 172.16.64.1 update-source lo0
+
+
+c.
+
+SanJose2# show ip bgp neighbors
+
+Step 4: Configure EBGP and verify BGP neighbors. 
+a.
+ISP(config)# router bgp 200
+ISP(config-router)# neighbor 192.168.1.6 remote-as 64512
+ISP(config-router)# neighbor 192.168.1.2 remote-as 64512
+ISP(config-router)# network 192.168.100.0
+
+b.
+SanJose1(config)# ip route 172.16.0.0 255.255.0.0 null0
+
+c.
+SanJose1(config)# router bgp 64512
+SanJose1(config-router)# neighbor 192.168.1.5 remote-as 200
+SanJose1(config-router)# network 172.16.0.0
+
+d.
+SanJose1# show ip bgp neighbors
+
+e.
+SanJose2(config)# ip route 172.16.0.0 255.255.0.0 null0
+SanJose2(config)# router bgp 64512
+SanJose2(config-router)# neighbor 192.168.1.1 remote-as 200
+SanJose2(config-router)# network 172.16.0.0
+
+Step 5: View BGP summary output.
+SanJose2# show ip bgp summary
+
+
+Step 6: Verify which path the traffic takes.
+f.
+ISP# clear ip bgp *
+
+g.
+ISP# ping 172.16.64.1
+
+h.
+ISP# ping 172.16.32.1
+
+i.
+ISP# show ip bgp
+
+j.
+ISP# ping 172.16.1.1 source 192.168.100.1
+
+ISP# ping 172.16.32.1 source 192.168.100.1
+
+ISP# ping 172.16.1.2 source 192.168.100.1
+
+ISP# ping 172.16.64.1 source 192.168.100.1
+
+ISP# ping
+Protocol [ip]: 
+Target IP address: 172.16.64.1
+Repeat count [5]: 
+Datagram size [100]: 
+Timeout in seconds [2]: 
+Extended commands [n]: y
+Source address or interface: 192.168.100.1
+
+Step 7: Configure the BGP next-hop-self feature.
+
+ISP(config)# router bgp 200
+
+ISP(config-router)# network 192.168.1.0 mask 255.255.255.252
+ISP(config-router)# network 192.168.1.4 mask 255.255.255.252
+
+ISP# show ip bgp
+
+ISP(config)# router bgp 200
+ISP(config-router)# no network 192.168.1.0 mask 255.255.255.252
+ISP(config-router)# no network 192.168.1.4 mask 255.255.255.252
+ISP(config-router)# exit
+ISP(config)# interface serial 0/0/1
+ISP(config-if)# shutdown
+ISP(config-if)#
+
+SanJose2# show ip bgp
+
+SanJose2# show ip route
+
+SanJose1(config)# router bgp 64512
+SanJose1(config-router)# neighbor 172.16.32.1 next-hop-self
+
+SanJose2(config)# router bgp 64512
+SanJose2(config-router)# neighbor 172.16.64.1 next-hop-self
+
+SanJose1# clear ip bgp * 
+SanJose1#
+
+SanJose2# clear ip bgp * 
+SanJose2#
+
+SanJose2# show ip bgp
+
+ISP(config)# interface serial 0/0/1
+ISP(config-if)# no shutdown
+ISP(config-if)#
+
+SanJose2# show ip route
+
+Step 8: Set BGP local preference.
+
+SanJose1(config)# route-map PRIMARY_T1_IN permit 10
+SanJose1(config-route-map)# set local-preference 150
+SanJose1(config-route-map)# exit 
+SanJose1(config)# router bgp 64512
+SanJose1(config-router)# neighbor 192.168.1.5 route-map PRIMARY_T1_IN in
+
+SanJose2(config)# route-map SECONDARY_T1_IN permit 10
+SanJose2(config-route-map)# set local-preference 125
+SanJose1(config-route-map)# exit 
+SanJose2(config)# router bgp 64512
+SanJose2(config-router)# neighbor 192.168.1.1 route-map SECONDARY_T1_IN in
+
+SanJose1# clear ip bgp * soft
+
+SanJose2# clear ip bgp * soft
+
+SanJose1# show ip bgp
+
+
+SanJose2# show ip bgp
+
+Step 9: Set BGP MED.
+
+ISP# show ip bgp
+ISP# show ip route
+
+
